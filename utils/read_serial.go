@@ -14,7 +14,7 @@ import (
 
 func main() {
 	config := &serial.Config{
-		Name:        "/dev/cu.usbmodem101",
+		Name:        "/dev/cu.usbmodem101", // depends on which port USB the device is plugged
 		Baud:        9600,
 		ReadTimeout: time.Second * 250,
 		Size:        8,
