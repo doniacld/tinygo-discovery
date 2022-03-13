@@ -1,10 +1,15 @@
 package main
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 func main() {
 	for {
-		println("hello women in tech!")
+		now := time.Now()
+		fmt.Printf("%02d:%02d, Hello Women Tech Makers!\n", now.Minute(), now.Second())
+
 		time.Sleep(time.Second)
 	}
 }
