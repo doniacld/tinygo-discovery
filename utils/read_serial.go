@@ -14,7 +14,7 @@ import (
 
 func main() {
 	config := &serial.Config{
-		Name:        "/dev/cu.usbmodem1101",
+		Name:        "/dev/cu.usbmodem101",
 		Baud:        9600,
 		ReadTimeout: time.Second * 250,
 		Size:        8,
@@ -30,7 +30,7 @@ func main() {
 
 	scanner := bufio.NewScanner(stream)
 	for scanner.Scan() {
-		fmt.Println(scanner.Text()) // Println will add back the final '\n'
+		fmt.Println(scanner.Text())
 	}
 	if err := scanner.Err(); err != nil {
 		log.Fatal(err)
