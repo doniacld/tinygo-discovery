@@ -21,6 +21,7 @@ func main() {
 			// print data with current time
 			now := time.Now()
 			fmt.Printf("%02d:%02d:%02d, ", now.Hour(), now.Minute(), now.Second())
+			// received data is times 10
 			fmt.Printf("Temperature: %02d.%d°C, ", temp/10, temp%10)
 			fmt.Printf("Humidity: %02d.%d%%\n", hum/10, hum%10)
 		}

@@ -14,12 +14,13 @@ import (
 
 func main() {
 	config := &serial.Config{
-		Name:        "/dev/cu.usbmodem101", // depends on which port USB the device is plugged
+		Name:        "/dev/cu.usbmodem101", // depends on which port USB the device is plugged to
 		Baud:        9600,
 		ReadTimeout: time.Second * 250,
 		Size:        8,
 	}
 
+	// open the serial port
 	stream, err := serial.OpenPort(config)
 	if err != nil {
 		log.Fatal(err)
@@ -28,25 +29,29 @@ func main() {
 	// close properly the stream when ctrl+c is hit
 	close(stream)
 
+	// scan the stream from the serial port
 	scanner := bufio.NewScanner(stream)
+	// read the stream and print it line by line
 	for scanner.Scan() {
 		fmt.Println(scanner.Text())
 	}
 	if err := scanner.Err(); err != nil {
 		log.Fatal(err)
 	}
-
-	time.Sleep(time.Second * 5)
-
 }
 
+// close intercepts a termination signal such as ctrl+c
 func close(port *serial.Port) {
 	c := make(chan os.Signal)
+	// listen to SIGTERM signal and notify in the channel
 	signal.Notify(c, syscall.SIGTERM)
 	go func() {
+		// read signal from the channel
 		<-c
 		fmt.Println("Ciao!")
+		// close the port properly
 		port.Close()
+		// exit the program
 		os.Exit(1)
 	}()
 }
