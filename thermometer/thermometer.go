@@ -13,7 +13,7 @@ func main() {
 	pin := machine.D6
 	dhtSensor := dht.New(pin, dht.DHT22)
 	for {
-		// call the method asking the captor for the data
+		// call the method asking the sensor for the data
 		temp, hum, err := dhtSensor.Measurements()
 		if err != nil {
 			fmt.Printf("Measurements failed: %s\n", err.Error())
