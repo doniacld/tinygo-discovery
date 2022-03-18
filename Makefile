@@ -17,5 +17,5 @@ hello:
 therm:
 	$(TINYGOFLASH) -target=$(TARGET) thermometer/thermometer.go
 
-read_serial:
+readserial:
 	$(GORUN) utils/read_serial.go
