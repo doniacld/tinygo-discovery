@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -13,8 +14,12 @@ import (
 )
 
 func main() {
+	// pass the port value as flag
+	port := flag.String("port", "/dev/cu.usbmodem1401", "The serial port the device is connected to.")
+	flag.Parse()
+
 	config := &serial.Config{
-		Name:        "/dev/cu.usbmodem101", // depends on which port USB the device is plugged to
+		Name:        *port,
 		Baud:        9600,
 		ReadTimeout: time.Second * 250,
 		Size:        8,
