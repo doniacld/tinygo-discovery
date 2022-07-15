@@ -14,7 +14,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"machine"
 	"strings"
@@ -29,11 +28,11 @@ import (
 // access point info
 const (
 	ssid = "myfree"
-	pass = "xxx"
+	pass = "l1erjdr2mv"
 
 	// IP address of the server aka "hub". Replace with your own info.
 	// Can specify a URL starting with http or https
-	url = "http://192.168.0.10/measure"
+	url = "http://192.168.1.127/measure"
 )
 
 // these are the default pins for the Arduino Nano33 IoT.
@@ -48,14 +47,16 @@ var (
 	// dhtSensor is the DHT sensor to measure temperature and humidity
 	//	dhtSensor dht.DummyDevice
 
-	buf             [0x400]byte
+	buf             [0x46a]byte
 	lastRequestTime time.Time
 	conn            net.Conn
 )
 
-type Measure struct {
-	Temp int16  `json:"temp"`
-	Hum  uint16 `json:"hum"`
+// measure holds the temperature and the humidity of the sensor
+// NB: json fields are useless for the moment cause the type.Name() is unimplemented for the moment
+type measure struct {
+	Temp int16  `json:"temperature"`
+	Hum  uint16 `json:"humidity"`
 }
 
 func setup() {
@@ -76,7 +77,7 @@ func setup() {
 }
 
 func main() {
-
+	// setup the device
 	setup()
 	http.SetBuf(buf[:])
 
@@ -87,64 +88,20 @@ func main() {
 	pin := machine.D6
 	dhtSensor := dht.New(pin, dht.DHT22)
 
+	// get measurements and send them to the server
 	cnt := 0
 	for {
-		// call the method asking the sensor for the data
-		temp, hum, err := dhtSensor.Measurements()
+		temp, hum, err := measurements(dhtSensor.(dht.DummyDevice))
 		if err != nil {
 			fmt.Printf("Measurements failed: %s\n", err.Error())
-		} else {
-			// print data with current time
-			now := time.Now()
-			fmt.Printf("%02d:%02d:%02d, ", now.Hour(), now.Minute(), now.Second())
-			// received data is times 10
-			fmt.Printf("Temperature: %02d.%d°C, ", temp/10, temp%10)
-			fmt.Printf("Humidity: %02d.%d%%\n", hum/10, hum%10)
 		}
 
-		// To test the connection, send a request to the server
-		//body := `{"temp": 270, "hum": 900}`
-		//resp, err := http.Post(url, "application/json", strings.NewReader(body))
-		//if err != nil {
-		//	println(err)
-		//	continue
-		//}
-
-		// TODO make it work
-		//measure := Measure{Temp: temp, Hum: hum}
-		//body, err := json.Marshal(measure)
-		//if err != nil {
-		//	fmt.Printf("%s\r\n", err.Error())
-		//	continue
-		//}
-
-		//fmt.Println("body: ", string(body))
-
-		body := fmt.Sprintf(`{"temp":%d,"hum":%d}`, temp, hum)
-
-		resp, err := http.Post(url, "application/json", strings.NewReader(string(body)))
-		if err != nil {
-			fmt.Printf("%s\r\n", err.Error())
-			continue
-		}
-
-		fmt.Printf("%s %s\r\n", resp.Proto, resp.Status)
-		for k, v := range resp.Header {
-			fmt.Printf("%s: %s\r\n", k, strings.Join(v, " "))
-		}
-		fmt.Printf("\r\n")
-
-		scanner := bufio.NewScanner(resp.Body)
-		for scanner.Scan() {
-			fmt.Printf("%s\r\n", scanner.Text())
-		}
-		resp.Body.Close()
+		postMeasure(measure{temp, hum})
 
 		cnt++
 		fmt.Printf("-------- %d --------\r\n", cnt)
 		time.Sleep(10 * time.Second)
 	}
-
 }
 
 // Wait for user to open serial console
@@ -180,20 +137,15 @@ func message(msg string) {
 	println(msg, "\r")
 }
 
-func postMeasure(measure Measure) {
-	body, err := json.Marshal(measure)
-	if err != nil {
-		println(err)
-		return
-	}
-
-	fmt.Println("body: ", string(body))
+func postMeasure(m measure) {
 
 	// To test the connection, send a request to the server
 	// body := `{"temp": 270, "hum": 900}`
-	// resp, err := http.Post(url, "application/json", strings.NewReader(body))
 
-	resp, err := http.Post(url, "application/json", strings.NewReader(string(body)))
+	body := fmt.Sprintf(`{"temp":%d,"hum":%d}`, m.Temp, m.Hum)
+	fmt.Println("body: ", string(body))
+
+	resp, err := http.Post(url, "application/json", strings.NewReader(body))
 	if err != nil {
 		fmt.Printf("%s\r\n", err.Error())
 		return
@@ -210,4 +162,26 @@ func postMeasure(measure Measure) {
 		fmt.Printf("%s\r\n", scanner.Text())
 	}
 	resp.Body.Close()
+}
+
+// measurements sends a command to get temperature and humidity to the sensor
+// and returns the values
+func measurements(dhtSensor measurable) (int16, uint16, error) {
+	temp, hum, err := dhtSensor.Measurements()
+	if err != nil {
+		fmt.Printf("Measurements failed: %s\n", err.Error())
+	} else {
+		// print data with current time
+		now := time.Now()
+		fmt.Printf("%02d:%02d:%02d, ", now.Hour(), now.Minute(), now.Second())
+		// received data is times 10
+		fmt.Printf("Temperature: %02d.%d°C, ", temp/10, temp%10)
+		fmt.Printf("Humidity: %02d.%d%%\n", hum/10, hum%10)
+	}
+
+	return temp, hum, err
+}
+
+type measurable interface {
+	Measurements() (int16, uint16, error)
 }
