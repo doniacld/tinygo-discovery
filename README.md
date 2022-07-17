@@ -16,6 +16,7 @@ If you do not have an arduino or a compatible microcontroller; you can use to be
 | Blink       | The HelloWorld of the microcontroller. Blink a led.                                              |
 | Serial      | Write on a serial port and use serial reader in utils to read values.                            |
 | Thermometer | Read temperature and humidity from a DHT22 sensor and use serial reader in utils to read values. |
+| Tiny hen    | Read temperature and humidity from a DHT22 sensor and sends it to a webserver through WiFi       |
 
 ### Quickstart
 

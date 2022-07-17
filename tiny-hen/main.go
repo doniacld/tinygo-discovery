@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"tinygo.org/x/drivers/dht"
-	"tinygo.org/x/drivers/net"
 	"tinygo.org/x/drivers/net/http"
 	"tinygo.org/x/drivers/wifinina"
 )
@@ -28,7 +27,7 @@ import (
 // access point info
 const (
 	ssid = "myfree"
-	pass = "l1erjdr2mv"
+	pass = "xxx"
 
 	// IP address of the server aka "hub". Replace with your own info.
 	// Can specify a URL starting with http or https
@@ -44,12 +43,9 @@ var (
 	// this is the ESP chip that has the WIFININA firmware flashed on it
 	adaptor *wifinina.Device
 
-	// dhtSensor is the DHT sensor to measure temperature and humidity
-	//	dhtSensor dht.DummyDevice
-
-	buf             [0x46a]byte
-	lastRequestTime time.Time
-	conn            net.Conn
+	buf [0x46a]byte
+	//	lastRequestTime time.Time
+	//	conn            net.Conn
 )
 
 // measure holds the temperature and the humidity of the sensor
@@ -139,10 +135,13 @@ func message(msg string) {
 
 func postMeasure(m measure) {
 
-	// To test the connection, send a request to the server
-	// body := `{"temp": 270, "hum": 900}`
+	temperature := float32(m.Temp) / 10
+	humidity := float32(m.Hum) / 10
 
-	body := fmt.Sprintf(`{"temp":%d,"hum":%d}`, m.Temp, m.Hum)
+	// To test the connection, send a request to the server
+	// body := `{"temperature": temperature, "humidity": humidity}`
+
+	body := fmt.Sprintf(`{"temp":%d,"hum":%d}`, temperature, humidity)
 	fmt.Println("body: ", string(body))
 
 	resp, err := http.Post(url, "application/json", strings.NewReader(body))
