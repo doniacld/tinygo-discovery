@@ -1,37 +1,40 @@
-// This example opens a TCP connection using a device with WiFiNINA firmware
-// and sends a HTTP request to retrieve a webpage, based on the following
-// Arduino example:
+//This example opens a TCP connection using a device with WiFiNINA firmware
+//and sends a HTTP request to retrieve a webpage, based on the following
+//Arduino example:
 //
-// https://github.com/arduino-libraries/WiFiNINA/blob/master/examples/WiFiWebClientRepeating/
+//https://github.com/arduino-libraries/WiFiNINA/blob/master/examples/WiFiWebClientRepeating/
 //
-// This example will not work with samd21 or other systems with less than 32KB
-// of RAM.  Use the following if you want to run wifinina on samd21, etc.
+//This example will not work with samd21 or other systems with less than 32KB
+//of RAM.  Use the following if you want to run wifinina on samd21, etc.
 //
-// examples/wifinina/webclient
-// examples/wifinina/tlsclient
-//
+//examples/wifinina/webclient
+//examples/wifinina/tlsclient
+
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"machine"
-	"strings"
 	"time"
 
 	"tinygo.org/x/drivers/dht"
+	"tinygo.org/x/drivers/net"
 	"tinygo.org/x/drivers/net/http"
 	"tinygo.org/x/drivers/wifinina"
 )
 
 // access point info
 const (
+	//ssid = "NETGEAR0E635F"
+	//pass = "blacktuba577"
+
 	ssid = "myfree"
-	pass = "xxx"
+	pass = "l1erjdr2mv"
 
 	// IP address of the server aka "hub". Replace with your own info.
 	// Can specify a URL starting with http or https
-	url = "http://192.168.1.127/measure"
+	url    = "http://192.168.1.127/measure"
+	server = "192.168.1.127"
 )
 
 // these are the default pins for the Arduino Nano33 IoT.
@@ -43,9 +46,10 @@ var (
 	// this is the ESP chip that has the WIFININA firmware flashed on it
 	adaptor *wifinina.Device
 
-	buf [0x46a]byte
-	//	lastRequestTime time.Time
-	//	conn            net.Conn
+	//buf [0x46a]byte
+	lastRequestTime time.Time
+	conn            net.Conn
+	buf             [256]byte
 )
 
 // measure holds the temperature and the humidity of the sensor
@@ -87,15 +91,18 @@ func main() {
 	// get measurements and send them to the server
 	cnt := 0
 	for {
+		fmt.Printf("-------- %d --------\r\n", cnt)
+
+		readConnection()
+		makeHTTPRequestGet()
 		temp, hum, err := measurements(dhtSensor.(dht.DummyDevice))
 		if err != nil {
 			fmt.Printf("Measurements failed: %s\n", err.Error())
 		}
 
-		postMeasure(measure{temp, hum})
+		makeHTTPRequest(measure{temp, hum})
 
 		cnt++
-		fmt.Printf("-------- %d --------\r\n", cnt)
 		time.Sleep(10 * time.Second)
 	}
 }
@@ -107,60 +114,85 @@ func waitSerial() {
 	}
 }
 
-// connect to access point
-func connectToAP() {
-	time.Sleep(2 * time.Second)
-	println("Connecting to " + ssid)
-	err := adaptor.ConnectToAccessPoint(ssid, pass, 10*time.Second)
-	if err != nil { // error connecting to AP
-		for {
-			println(err)
-			time.Sleep(1 * time.Second)
-		}
-	}
-
-	println("Connected.")
-
-	ip, _, _, err := adaptor.GetIP()
-	for ; err != nil; ip, _, _, err = adaptor.GetIP() {
-		message(err.Error())
-		time.Sleep(1 * time.Second)
-	}
-	message(ip.String())
-}
-
 func message(msg string) {
 	println(msg, "\r")
 }
 
-func postMeasure(m measure) {
+func readConnection() {
+	if conn != nil {
+		for n, err := conn.Read(buf[:]); n > 0; n, err = conn.Read(buf[:]) {
+			if err != nil {
+				println("Read error: " + err.Error())
+			} else {
+				print(string(buf[0:n]))
+			}
+		}
+	}
+}
 
-	temperature := float32(m.Temp) / 10
-	humidity := float32(m.Hum) / 10
-
-	// To test the connection, send a request to the server
-	// body := `{"temperature": temperature, "humidity": humidity}`
-
-	body := fmt.Sprintf(`{"temp":%d,"hum":%d}`, temperature, humidity)
-	fmt.Println("body: ", string(body))
-
-	resp, err := http.Post(url, "application/json", strings.NewReader(body))
-	if err != nil {
-		fmt.Printf("%s\r\n", err.Error())
-		return
+func makeHTTPRequestGet() {
+	var err error
+	if conn != nil {
+		conn.Close()
 	}
 
-	fmt.Printf("%s %s\r\n", resp.Proto, resp.Status)
-	for k, v := range resp.Header {
-		fmt.Printf("%s: %s\r\n", k, strings.Join(v, " "))
-	}
-	fmt.Printf("\r\n")
+	// make TCP connection
+	ip := net.ParseIP(server)
+	raddr := &net.TCPAddr{IP: ip, Port: 80}
+	laddr := &net.TCPAddr{Port: 8080}
 
-	scanner := bufio.NewScanner(resp.Body)
-	for scanner.Scan() {
-		fmt.Printf("%s\r\n", scanner.Text())
+	message("\r\n---------------\r\nDialing TCP connection")
+	conn, err := net.DialTCP("tcp", laddr, raddr)
+	for ; err != nil; conn, err = net.DialTCP("tcp", laddr, raddr) {
+		message("Connection failed: " + err.Error())
+		time.Sleep(5 * time.Second)
 	}
-	resp.Body.Close()
+	println("Connected!\r")
+
+	print("Sending HTTP request...")
+	fmt.Fprintln(conn, "GET /hi HTTP/1.1")
+	fmt.Fprintln(conn, "Host:", server)
+	fmt.Fprintln(conn, "Content-Type: application/json")
+	fmt.Fprintln(conn)
+	println("Sent!")
+
+	lastRequestTime = time.Now()
+}
+
+func makeHTTPRequest(m measure) {
+	var err error
+	if conn != nil {
+		conn.Close()
+	}
+
+	// make TCP connection
+	ip := net.ParseIP(server)
+	raddr := &net.TCPAddr{IP: ip, Port: 80}
+	laddr := &net.TCPAddr{Port: 8080}
+
+	message("\r\n---------------\r\nDialing TCP connection")
+	conn, err := net.DialTCP("tcp", laddr, raddr)
+	for ; err != nil; conn, err = net.DialTCP("tcp", laddr, raddr) {
+		message("Connection failed: " + err.Error())
+		time.Sleep(5 * time.Second)
+	}
+	println("Connected!\r")
+
+	body := fmt.Sprintf(`{"temperature":%02d.%d,"humidity":%02d.%d}`, m.Temp/10, m.Temp%10, m.Hum/10, m.Hum%10)
+	bodyInBytes := []byte(body)
+	contentLength := len(bodyInBytes)
+
+	print("Sending HTTP request...")
+	fmt.Fprintln(conn, "POST /measure HTTP/1.1")
+	fmt.Fprintln(conn, "Host:", server)
+	fmt.Fprintln(conn, "Content-Type: application/json")
+	fmt.Fprintln(conn, fmt.Sprintf("Content-Length: %d", contentLength))
+	fmt.Fprintf(conn, "\n")
+	fmt.Fprintln(conn, body)
+	fmt.Fprintln(conn, "\n")
+	println("Sent!")
+
+	lastRequestTime = time.Now()
 }
 
 // measurements sends a command to get temperature and humidity to the sensor
@@ -183,4 +215,26 @@ func measurements(dhtSensor measurable) (int16, uint16, error) {
 
 type measurable interface {
 	Measurements() (int16, uint16, error)
+}
+
+// connect to access point
+func connectToAP() {
+	time.Sleep(2 * time.Second)
+	println("Connecting to " + ssid)
+	err := adaptor.ConnectToAccessPoint(ssid, pass, 10*time.Second)
+	if err != nil { // error connecting to AP
+		for {
+			println(err)
+			time.Sleep(1 * time.Second)
+		}
+	}
+
+	println("Connected.")
+
+	ip, _, _, err := adaptor.GetIP()
+	for ; err != nil; ip, _, _, err = adaptor.GetIP() {
+		message(err.Error())
+		time.Sleep(1 * time.Second)
+	}
+	message(ip.String())
 }
