@@ -49,11 +49,11 @@ func main() {
 func close(port *serial.Port) {
 	c := make(chan os.Signal)
 	// listen to SIGTERM signal and notify in the channel
-	signal.Notify(c, syscall.SIGTERM)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		// read signal from the channel
 		<-c
-		fmt.Println("Ciao!")
+		fmt.Println("\nCiao!")
 		// close the port properly
 		port.Close()
 		// exit the program
