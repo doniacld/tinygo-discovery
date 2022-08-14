@@ -1,5 +1,8 @@
-# Output of the go coverage tool, specifically when used with LiteIDE
-*.out
+# Output files
+bin/
 
 # IDE generated files
-.idea
+.idea/
+
+# To do some ugly things in tinygo drivers
+vendor/
