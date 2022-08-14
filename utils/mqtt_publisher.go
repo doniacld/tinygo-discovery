@@ -7,9 +7,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -23,7 +20,8 @@ const (
 
 	// topic is the topic to publish to
 	topic = "topic/secret"
-	msg   = "Hello Gopher!"
+	// msg is the message to publish
+	msg = "Hello Gopher!"
 )
 
 var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
@@ -44,7 +42,7 @@ func main() {
 	flag.Parse()
 	broker := parseFlag(*brokerFlag)
 
-	closePublisher()
+	//closePublisher()
 
 	// create a new set of options for MQTT client
 	options := mqtt.NewClientOptions()
@@ -92,6 +90,7 @@ func parseFlag(broker string) string {
 	}
 }
 
+/*
 // close intercepts a termination signal such as ctrl+c
 func closePublisher() {
 	c := make(chan os.Signal)
@@ -105,3 +104,4 @@ func closePublisher() {
 		os.Exit(1)
 	}()
 }
+*/
