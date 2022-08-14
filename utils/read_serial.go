@@ -48,7 +48,7 @@ func main() {
 // close intercepts a termination signal such as ctrl+c
 func close(port *serial.Port) {
 	c := make(chan os.Signal)
-	// listen to SIGTERM signal and notify in the channel
+	// listen to any os interruption, SIGTERM signal and notify in the channel
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		// read signal from the channel
