@@ -13,28 +13,27 @@
 package main
 
 import (
+	"device/arm"
 	"fmt"
+	"log"
 	"machine"
 	"time"
 
 	"tinygo.org/x/drivers/dht"
 	"tinygo.org/x/drivers/net"
-	"tinygo.org/x/drivers/net/http"
 	"tinygo.org/x/drivers/wifinina"
 )
 
 // access point info
 const (
-	//ssid = "NETGEAR0E635F"
-	//pass = "blacktuba577"
-
-	ssid = "myfree"
-	pass = "l1erjdr2mv"
+	ssid = "NETGEAR0E635F"
+	pass = "blacktuba577"
 
 	// IP address of the server aka "hub". Replace with your own info.
 	// Can specify a URL starting with http or https
-	url    = "http://192.168.1.127/measure"
-	server = "192.168.1.127"
+	url = "http://192.168.1.127/measure"
+	//server = "192.168.1.127"
+	server = "10.0.0.177"
 )
 
 // these are the default pins for the Arduino Nano33 IoT.
@@ -79,9 +78,9 @@ func setup() {
 func main() {
 	// setup the device
 	setup()
-	http.SetBuf(buf[:])
+	//http.SetBuf(buf[:])
 
-	waitSerial()
+	//waitSerial()
 	connectToAP()
 
 	// configure the data pin
@@ -94,13 +93,12 @@ func main() {
 		fmt.Printf("-------- %d --------\r\n", cnt)
 
 		readConnection()
-		makeHTTPRequestGet()
 		temp, hum, err := measurements(dhtSensor.(dht.DummyDevice))
 		if err != nil {
 			fmt.Printf("Measurements failed: %s\n", err.Error())
+		} else {
+			makeHTTPRequest(measure{temp, hum})
 		}
-
-		makeHTTPRequest(measure{temp, hum})
 
 		cnt++
 		time.Sleep(10 * time.Second)
@@ -130,35 +128,6 @@ func readConnection() {
 	}
 }
 
-func makeHTTPRequestGet() {
-	var err error
-	if conn != nil {
-		conn.Close()
-	}
-
-	// make TCP connection
-	ip := net.ParseIP(server)
-	raddr := &net.TCPAddr{IP: ip, Port: 80}
-	laddr := &net.TCPAddr{Port: 8080}
-
-	message("\r\n---------------\r\nDialing TCP connection")
-	conn, err := net.DialTCP("tcp", laddr, raddr)
-	for ; err != nil; conn, err = net.DialTCP("tcp", laddr, raddr) {
-		message("Connection failed: " + err.Error())
-		time.Sleep(5 * time.Second)
-	}
-	println("Connected!\r")
-
-	print("Sending HTTP request...")
-	fmt.Fprintln(conn, "GET /hi HTTP/1.1")
-	fmt.Fprintln(conn, "Host:", server)
-	fmt.Fprintln(conn, "Content-Type: application/json")
-	fmt.Fprintln(conn)
-	println("Sent!")
-
-	lastRequestTime = time.Now()
-}
-
 func makeHTTPRequest(m measure) {
 	var err error
 	if conn != nil {
@@ -170,12 +139,24 @@ func makeHTTPRequest(m measure) {
 	raddr := &net.TCPAddr{IP: ip, Port: 80}
 	laddr := &net.TCPAddr{Port: 8080}
 
-	message("\r\n---------------\r\nDialing TCP connection")
+	message("--- Dialing TCP connection ---")
 	conn, err := net.DialTCP("tcp", laddr, raddr)
+
+	cnt := 0
 	for ; err != nil; conn, err = net.DialTCP("tcp", laddr, raddr) {
 		message("Connection failed: " + err.Error())
+		if err == wifinina.ErrConnectionTimeout {
+			connectToAP()
+		}
+
+		if cnt == 10 {
+			connectToAP()
+		}
+
+		cnt++
 		time.Sleep(5 * time.Second)
 	}
+
 	println("Connected!\r")
 
 	body := fmt.Sprintf(`{"temperature":%02d.%d,"humidity":%02d.%d}`, m.Temp/10, m.Temp%10, m.Hum/10, m.Hum%10)
@@ -220,21 +201,75 @@ type measurable interface {
 // connect to access point
 func connectToAP() {
 	time.Sleep(2 * time.Second)
-	println("Connecting to " + ssid)
-	err := adaptor.ConnectToAccessPoint(ssid, pass, 10*time.Second)
-	if err != nil { // error connecting to AP
-		for {
-			println(err)
-			time.Sleep(1 * time.Second)
+	for {
+		err := adaptor.ConnectToAccessPoint(ssid, pass, 30*time.Second)
+		if err == nil {
+			log.Println("connected to access point")
+			break
 		}
+		log.Println("let's retry to connect to access point", err.Error())
+		//message(err.Error())
 	}
+
+	//time.Sleep(2 * time.Second)
+	//println("Connecting to " + ssid)
+	//err := adaptor.ConnectToAccessPoint(ssid, pass, 2*time.Minute)
+	//if err != nil { // error connecting to AP
+	//	message(err.Error())
+	//	err = adaptor.ConnectToAccessPoint(ssid, pass, 2*time.Minute)
+	//	if err != nil {
+	//		message(err.Error())
+	//		forceAbort()
+	//	}
+	//}
 
 	println("Connected.")
 
 	ip, _, _, err := adaptor.GetIP()
 	for ; err != nil; ip, _, _, err = adaptor.GetIP() {
 		message(err.Error())
-		time.Sleep(1 * time.Second)
 	}
 	message(ip.String())
+}
+
+var ResetOnAbort = true
+
+func forceAbort() {
+	if ResetOnAbort {
+		fmt.Println("system reset")
+		arm.SystemReset()
+	}
+	// lock up forever
+	for {
+		arm.Asm("wfi")
+	}
+}
+
+func makeHTTPRequestGet() {
+	var err error
+	if conn != nil {
+		conn.Close()
+	}
+
+	// make TCP connection
+	ip := net.ParseIP(server)
+	raddr := &net.TCPAddr{IP: ip, Port: 80}
+	laddr := &net.TCPAddr{Port: 8080}
+
+	message("\r\n---------------\r\nDialing TCP connection")
+	conn, err := net.DialTCP("tcp", laddr, raddr)
+	for ; err != nil; conn, err = net.DialTCP("tcp", laddr, raddr) {
+		message("Connection failed: " + err.Error())
+		time.Sleep(5 * time.Second)
+	}
+	println("Connected!\r")
+
+	print("Sending HTTP request...")
+	fmt.Fprintln(conn, "GET /hi HTTP/1.1")
+	fmt.Fprintln(conn, "Host:", server)
+	fmt.Fprintln(conn, "Content-Type: application/json")
+	fmt.Fprintln(conn)
+	println("Sent!")
+
+	lastRequestTime = time.Now()
 }
