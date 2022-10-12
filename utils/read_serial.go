@@ -32,7 +32,7 @@ func main() {
 	}
 
 	// close properly the stream when ctrl+c is hit
-	close(stream)
+	closePort(stream)
 
 	// scan the stream from the serial port
 	scanner := bufio.NewScanner(stream)
